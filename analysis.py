@@ -1,5 +1,6 @@
 """
-implemented: power correlation, projected power corr, network analysis
+implemented: power/envelope correlation, projected power correlation, PLV
+to be implement: network analysis, granger causality
 """
 
 import numpy as np

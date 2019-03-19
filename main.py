@@ -74,10 +74,12 @@ for pair in os.listdir(datapath):
             json.dump(recording.eegs[1].get_data().tolist(), outfile)
 
         # save autoreject and length info
+        epoch_info = recording.config['autoreject'][0].tolist()
+        length = recording.config['length']
+        epoch_info.append(length)  # save a list of numbers, with list[0:-1]
         info = os.path.join(infopath, recording.config['pair_name'] + '_0')
         with open(info, 'w') as outfile:
-            json.dump(recording.config, outfile)
-
+            json.dump(epoch_info, outfile)
 
 
 
