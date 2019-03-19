@@ -3,12 +3,12 @@ implemented: power correlation, projected power corr, network analysis
 """
 
 import numpy as np
-from read import Recording
 import scipy.signal as signal
 from scipy.signal import butter, lfilter
 
 
-def simple_corr(recording, freq, mode='psd', epoch_wise=True):
+
+def simple_corr(data, srate, freq, mode='psd', epoch_wise=True):
     """
     compute channel-wise, epoch-to-epoch comparison analysis on the two subjects.
     :param Recording: Recording object
@@ -20,14 +20,10 @@ def simple_corr(recording, freq, mode='psd', epoch_wise=True):
 
     :return: cor: either a list or an int object.
     """
-    # check if the input type is Recording object
-    if type(recording) is not Recording:
-        TypeError('ERROR - input type must be Recording object')
 
     # extract data from Recording object.
     # Data consists of two lists of np.array (n_epochs, n_channels, sampling_rate)
-    data = [recording.eegs[i].get_data() for i in range(2)]
-    Fs = recording.config['srate']
+    Fs = srate
     n_channel = data[0].shape[1]
     n_epoch = data[0].shape[0]
     all_channels=[]
@@ -76,7 +72,6 @@ def compute_single_freq(data, Fs, mode, freq, which_channel, plot=False):
               for subject in range(2)  # for each subject
               ])
 
-
     # compute values
     if mode == 'envelope':
         values = np.abs(complex_signal)  # envelope
@@ -90,7 +85,6 @@ def compute_single_freq(data, Fs, mode, freq, which_channel, plot=False):
 
 
 def _proj_power_corr(X, Y):
-    # TODO
     # compute power proj corr
     X_abs = np.abs(X)
     Y_abs = np.abs(Y)
