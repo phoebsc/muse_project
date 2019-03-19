@@ -1,85 +1,75 @@
 import numpy as np
+import codecs, json, os
 from matplotlib import pyplot as plt
 from read import Recording
 from analysis import simple_corr, compute_single_freq, butter_lowpass_filter
-import os
-import json
 
-# initialization
-config = {}
-path = 'C:/Users/Phoebe Chen/Dropbox/MWM_Lowlands_2015_DATA/15-08-21-15-33-20'
+"""
+simple analysis
+"""
+jsonpath = './json_files'
+infopath = './info_files'
+channels =['AF3', 'F7', 'F3', 'FC5', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'FC6', 'F4', 'F8', 'AF4']
 
-# Config and preprocessing params for lowlands dataset
-config['lowlands'] = {'srate': 128,  # sampling rate
-                      'channels':['AF3','F7','F3','FC5','T7','P7','O1','O2','P8','T8','FC6','F4','F8','AF4'],  # channel names
-                      'epoch': [-0.5, 0.5],  # epochs of 1s length
-                      'ICAparam': {'method': 'fastica',
-                                   'n_components': 14,
-                                   'decim': 3,
-                                   'random_state': 23},  # ICA params
-                      'notch': 60,  # notch filter frequency
-                      'bandpass':[0.1,30],  # initial band pass range
 
-                      }
+files = []
+infos = []
+for file in os.listdir(jsonpath):
+    files.append(os.path.join(jsonpath, file))
+    infos.append(os.path.join(infopath, file))
 
-# Create the Recording object
-recording = Recording(path, config, 'lowlands')
-
-# Preprocess the Recording
-recording.filter()
-recording.epoch()
-recording.autoreject()
-#recording.identify_ICA()
+#reading json files
+f = codecs.open(files[0], 'r', encoding='utf-8').read()
+sample0 = np.array(json.loads(f))
+f = codecs.open(files[1], 'r', encoding='utf-8').read()
+sample1 = np.array(json.loads(f))
+f = codecs.open(infos[0], 'r', encoding='utf-8').read()
+info = np.array(json.loads(f))
 
 
 
-ind = recording.config['autoreject'][0]
-data = [recording.eegs[i].get_data() for i in range(2)]
-plv_corr = simple_corr(data,recording.config['srate'], 10, mode='plv', epoch_wise=True)
-power_corr = simple_corr(data,recording.config['srate'], 10, mode='power', epoch_wise=True)
+"""
+real pairs and pseudo-pairs
+real pairs: matched epochs
+pseudo pairs: randomly selected epoch pairs
+"""
+
+
+ind = info[0:-1]
+data = [sample0, sample1]
+plv_corr = simple_corr(data, 128, 10, mode='plv', epoch_wise=True)
+power_corr = simple_corr(data, 128, 10, mode='power', epoch_wise=True)
 order = 6
 fs = 50.0
 cutoff = 2
 
+colors=14*['b']
+colors[4] = 'r'
 for i in range(14):
-    plt.plot(ind,butter_lowpass_filter(plv_corr[i], cutoff, fs, order),alpha=0.5)
+    plt.plot(butter_lowpass_filter(plv_corr[i], 5,20,order), alpha=0.5, label=channels[i],color=colors[i])
     # plt.scatter(ind, butter_lowpass_filter(corr[i], cutoff, fs, order), alpha=0.5)
     #plt.plot(ind, corr[i], alpha=0.5)
+plt.legend()
 
-"""
-compute average metrics for real and pseudo pairs
-hypothesis: metrics are significantly higher for real pairs
-"""
+plt.plot(np.mean(plv_corr, axis=1))
+plt.plot(butter_lowpass_filter(np.mean(plv_corr, axis=0), 5, 20, order))
 
-mode = 'plv'
-datapath = 'C:/Users/Phoebe Chen/Dropbox/MWM_Lowlands_2015_DATA/'
-jsonpath = 'C:/Users/Phoebe Chen/PycharmProjects/lowlands_benaki/json_files'
-infopath = 'C:/Users/Phoebe Chen/PycharmProjects/lowlands_benaki/info_files'
-for pair in os.listdir(datapath):
-    filepath = os.path.join(datapath,pair)
-    recording = Recording(filepath, config, 'lowlands')
-    recording.filter()
-    recording.epoch()
-    recording.autoreject()
-    if len(recording.eegs[0]) < 100:  # exclude data with less than 100 good epochs
-        pass
-    else:
+plt.legend()
+subdata = [data[i][20:30, :, :] for i in range(2)]
+values = compute_single_freq(subdata, 128, 'proj', 10, 5)
+values = np.imag(values)
+plt.plot(np.concatenate(values[0]))
+plt.plot(np.concatenate(values[1]))
 
-        # save data
-        filename0 = os.path.join(jsonpath, recording.config['pair_name'] + '_0')
-        filename1 = os.path.join(jsonpath, recording.config['pair_name'] + '_1')
-        with open(filename0, 'w') as outfile:
-            json.dump(recording.eegs[0].get_data().tolist(), outfile)
-        with open(filename1, 'w') as outfile:
-            json.dump(recording.eegs[1].get_data().tolist(), outfile)
+plt.plot(np.arange(0, 10*130, 130), np.array(plv_corr[5][30:40])*10)
 
-        # save autoreject and length info
-        epoch_info = recording.config['autoreject'][0].tolist()
-        length = recording.config['length']
-        epoch_info.append(length)  # save a list of numbers, with list[0:-1]
-        info = os.path.join(infopath, recording.config['pair_name'] + '_0')
-        with open(info, 'w') as outfile:
-            json.dump(epoch_info, outfile)
+
+
+
+plv_corr = np.array(plv_corr)
+plt.imshow(plv_corr, cmap='icefire',interpolation='hanning')
+
+
 
 
 

@@ -15,7 +15,7 @@ path = 'C:/Users/Phoebe Chen/Dropbox/MWM_Lowlands_2015_DATA/15-08-21-15-33-20'
 # Config and preprocessing params for lowlands dataset
 config['lowlands'] = {'srate': 128,  # sampling rate
                       'channels':['AF3','F7','F3','FC5','T7','P7','O1','O2','P8','T8','FC6','F4','F8','AF4'],  # channel names
-                      'epoch': [-0.5, 0.5],  # epochs of 1s length
+                      'epoch': [-1.5, 1.5],  # epochs of 1s length #TODO changed to 3 sec
                       'PCAparam': None,  # PCA params (not used)
                       'ICAparam': {'method': 'fastica',
                                    'n_components': 14,
