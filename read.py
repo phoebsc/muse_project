@@ -178,3 +178,4 @@ class Recording:
 
         return fig
 
+# Test change for first commit
