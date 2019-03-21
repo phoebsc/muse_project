@@ -23,13 +23,13 @@ def simple_corr(data, srate, freq, mode='psd', epoch_wise=True):
 
     # extract data from Recording object.
     # Data consists of two lists of np.array (n_epochs, n_channels, sampling_rate)
-    Fs = srate
     n_channel = data[0].shape[1]
-    n_epoch = data[0].shape[0]
+    n_epoch = min(data[0].shape[0], data[1].shape[0])
+    n_samp = data[0].shape[2]
     all_channels = []
     # compute correlation coefficient for all symmetrical channel pairs
     for channel in range(n_channel):
-        values = compute_single_freq(data, Fs, mode, freq, channel)
+        values = compute_single_freq(data, n_samp, mode, freq, channel)
 
         # generate a list of per-epoch end values
         if epoch_wise:
@@ -37,19 +37,25 @@ def simple_corr(data, srate, freq, mode='psd', epoch_wise=True):
                 result = [np.corrcoef(values[:, epoch, :])[0][1]
                           for epoch in range(n_epoch)]
             elif mode is 'plv':
-                result = [abs(np.sum(np.exp(1j*(values[0, epoch, :]-values[1, epoch, :])))) / Fs
+                n_samples = values.shape[2]
+                result = [abs(np.sum(np.exp(1j*(values[0, epoch, :]-values[1, epoch, :])))) / n_samples
                           for epoch in range(n_epoch)]
             elif mode is 'proj':
                 result = [_proj_power_corr(values[0, epoch, :], values[1, epoch, :])
                           for epoch in range(n_epoch)]
-
         # generate a single correlation value
         else:
             strands = [np.concatenate(values[n]) for n in range(2)]  # concatenate values from all epochs
-            result = np.corrcoef(strands)[0][1]  # generate a corr coef overall
+            if mode in ['envelope', 'power']:
+                result = np.corrcoef(strands)[0][1]  # generate a corr coef overall
+            elif mode is 'plv':
+                n_samples = len(strands[0])
+                result = abs(np.sum(np.exp(1j*(strands[0]-strands[1])))) / n_samples
+
         all_channels.append(result)
 
     return all_channels
+
 
 
 def compute_single_freq(data, Fs, mode, freq, which_channel, plot=False):
@@ -62,19 +68,20 @@ def compute_single_freq(data, Fs, mode, freq, which_channel, plot=False):
     :return: values [2 x n_epochs x sampling_rate]
     """
     window_size = min(5 * freq, Fs)  # window size is frequency dependent: max(5*freq, sampling rate)
-    n_epoch = data[0].shape[0]
+    n_epoch = min(data[0].shape[0], data[1].shape[0])
 
     # short-time Fourier transform
+
     complex_signal = np.array([[signal.stft(
-        data[subject][epoch][which_channel],
-        nperseg=window_size,
-        nfft=Fs,  # equivalent to "pad_to". make sure the freq resolution is 1 Hz
-        window='hanning',
-        noverlap=window_size - 1)[2][freq]  # general output from stft is "f,t,Zxx", we only need Zxx[freq]
-               for epoch in range(n_epoch)  # for every epoch
-               ]
-              for subject in range(2)  # for each subject
-              ])
+            data[subject][epoch][which_channel],
+            nperseg=window_size,
+            nfft=Fs,  # equivalent to "pad_to". make sure the freq resolution is 1 Hz
+            window='hanning',
+            noverlap=window_size - 1)[2][freq]  # general output from stft is "f,t,Zxx", we only need Zxx[freq]
+                   for epoch in range(n_epoch)  # for every epoch
+                   ]
+                  for subject in range(2)  # for each subject
+                  ])
 
     # compute values
     if mode == 'envelope':

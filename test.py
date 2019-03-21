@@ -50,7 +50,7 @@ complex_signal = mlab.specgram(
     window=mlab.window_hanning,
     noverlap= 49,  # moving window in a 1 sample step (so overlap length is one sample short of window size)
     pad_to=128, # making sure the resolution is 1 Hz
-    mode='complex')  # mode can also be changed to 'complex'
+    mode='complex')  # return the analytic signal
 
 plt.title('mlab.specgram')
 plt.plot(np.real(complex_signal[0][freq]),alpha=0.6, label='real')  # real part
@@ -69,7 +69,7 @@ nyquist=128/2
 order = int(128/freq*4)  # "For EEG signals, a useful rule of thumb is to ‘look at’
                     # about 4 to 5 cycles of the desired EEG rhythm."
 
-b = signal.firwin(order, cutoff = [cutoff[0]/64,cutoff[1]/64],fs=128, window="hanning", pass_zero=False)
+b = signal.firwin(order, cutoff = [cutoff[0]/nyquist,cutoff[1]/nyquist],fs=128, window="hanning", pass_zero=False)
 filtered = signal.lfilter(b, 1.0, x)
 complex_signal = signal.hilbert(filtered)
 plt.title('FIR filter and Hilbert transform')
