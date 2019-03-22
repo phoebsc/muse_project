@@ -5,12 +5,13 @@ import matplotlib.mlab as mlab
 from matplotlib import pyplot as plt
 import numpy as np
 from read import Recording
+from read import DataImportType
 
 """
 initialization
 """
 config = {}
-path = 'C:/Users/Phoebe Chen/Dropbox/MWM_Lowlands_2015_DATA/15-08-21-15-33-20'
+path = '/Users/averybedows/Desktop/allthethings/MWM/Lowlands/15-08-21-15-52-48'
 
 # Config and preprocessing params for lowlands dataset
 config['lowlands'] = {'srate': 128,  # sampling rate
@@ -28,7 +29,7 @@ config['lowlands'] = {'srate': 128,  # sampling rate
                       }
 
 # Create the Recording object
-recording = Recording(path, config, 'lowlands')
+recording = Recording(path, config, 'lowlands', DataImportType.CSV)
 
 # Preprocess the Recording
 recording.filter()
@@ -38,7 +39,7 @@ recording.autoreject()
 """
 trying out time-frequency methods
 """
-x = recording.eegs[0].get_data()[55][5]  # some random data
+x = recording.eegs[0].get_data()[10][5]  # some random data
 freq = 10  # freq of interest is 10 Hz
 
 
@@ -59,7 +60,7 @@ plt.plot(np.angle(complex_signal[0][freq]),alpha=0.3, label='angle')   # phase o
 plt.plot(np.abs(complex_signal[0][freq]),alpha=0.6, label='envelope/amplitude')  # envelope of the complex signal
 plt.plot(np.abs(complex_signal[0][freq])*2,alpha=0.6, label='power = amplitude * 2')  # power
 plt.legend()
-
+plt.show()
 
 # FIR filtering to get 10 Hz -11 Hz data, and then hilbert transform to get the analytic/complex signal
 import scipy.signal as signal
@@ -79,6 +80,7 @@ plt.plot(np.angle(complex_signal),alpha=0.3, label='angle')   # phase of the com
 plt.plot(np.abs(complex_signal),alpha=0.6, label='envelope/amplitude')  # envelope of the complex signal
 plt.plot(np.abs(complex_signal)*2,alpha=0.6, label='power = amplitude * 2')  # power
 plt.legend()
+plt.show()
 
 
 # short-time Fourier transform
@@ -91,5 +93,6 @@ plt.plot(np.angle(complex_signal),alpha=0.3, label='angle')   # phase of the com
 plt.plot(np.abs(complex_signal),alpha=0.6, label='envelope/amplitude')  # envelope of the complex signal
 plt.plot(np.abs(complex_signal)*2,alpha=0.6, label='power = amplitude * 2')  # power
 plt.legend()
+plt.show()
 
 

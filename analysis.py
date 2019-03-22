@@ -6,6 +6,7 @@ to implement: network analysis, granger causality
 import numpy as np
 import scipy.signal as signal
 from scipy.signal import butter, lfilter
+import matplotlib.pyplot as plt
 
 
 def simple_corr(data, srate, freq, mode='psd', epoch_wise=True):
@@ -21,14 +22,19 @@ def simple_corr(data, srate, freq, mode='psd', epoch_wise=True):
     :return: cor: either a list or an int object.
     """
 
-    # extract data from Recording object.
-    # Data consists of two lists of np.array (n_epochs, n_channels, sampling_rate)
+    # Extract data from Recording object.
+    # Data is a list of two np.arrays, each one of dimension (n_epochs x n_channels x n_samples). Since
+    # epoch length is 1 second, n_samples = 1 * sampling_rate = sampling_rate = srate.
     Fs = srate
     n_channel = data[0].shape[1]
     n_epoch = data[0].shape[0]
+
     all_channels = []
     # compute correlation coefficient for all symmetrical channel pairs
     for channel in range(n_channel):
+        # values is an np.array of dimension (2 x n_epochs x n_timesteps),
+        # where the third dimension represents the timestep
+        # for calculating the complex signal via the short-time fourier transform
         values = compute_single_freq(data, Fs, mode, freq, channel)
 
         # generate a list of per-epoch end values
@@ -37,7 +43,8 @@ def simple_corr(data, srate, freq, mode='psd', epoch_wise=True):
                 result = [np.corrcoef(values[:, epoch, :])[0][1]
                           for epoch in range(n_epoch)]
             elif mode is 'plv':
-                result = [abs(np.sum(np.exp(1j*(values[0, epoch, :]-values[1, epoch, :])))) / Fs
+                # Note that we're averaging across the timesteps in the time-frequency decomposition
+                result = [abs(np.sum(np.exp(1j*(values[0, epoch, :]-values[1, epoch, :])))) / values.shape[2]
                           for epoch in range(n_epoch)]
             elif mode is 'proj':
                 result = [_proj_power_corr(values[0, epoch, :], values[1, epoch, :])
@@ -55,26 +62,24 @@ def simple_corr(data, srate, freq, mode='psd', epoch_wise=True):
 def compute_single_freq(data, Fs, mode, freq, which_channel, plot=False):
     """
 
-    :param data: a list of two arrays 2 x [n_epochs x n_channels x sampling_rate]
+    :param data: a list of two arrays 2 x [n_epochs x n_channels x n_samples]
     :param mode: str analysis mode
     :param freq: frequency of interest
     :param which_channel:
-    :return: values [2 x n_epochs x sampling_rate]
+    :return: values [2 x n_epochs x n_timesteps], where n_timesteps is the number
+    of timesteps at which the stft calculated the complex signal
     """
     window_size = min(5 * freq, Fs)  # window size is frequency dependent: max(5*freq, sampling rate)
-    n_epoch = data[0].shape[0]
 
     # short-time Fourier transform
     complex_signal = np.array([[signal.stft(
         data[subject][epoch][which_channel],
-        nperseg=window_size,
-        nfft=Fs,  # equivalent to "pad_to". make sure the freq resolution is 1 Hz
-        window='hanning',
-        noverlap=window_size - 1)[2][freq]  # general output from stft is "f,t,Zxx", we only need Zxx[freq]
-               for epoch in range(n_epoch)  # for every epoch
-               ]
-              for subject in range(2)  # for each subject
-              ])
+        nperseg  =  window_size,
+        nfft     =  Fs,  # equivalent to "pad_to". make sure the freq resolution is 1 Hz
+        window   = 'hanning',
+        noverlap = window_size - 1)[2][freq]  # general output from stft is "f,t,Zxx", we only need Zxx[freq]
+                for epoch in range(data[subject].shape[0])]  # for every epoch
+                for subject in range(2)])  # for each subject
 
     # compute values
     if mode == 'envelope':

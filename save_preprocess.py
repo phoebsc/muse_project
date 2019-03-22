@@ -5,6 +5,7 @@ save preprocessed files
 from read import Recording
 import os
 import json
+from read import DataImportType
 
 # initialization
 config = {}
@@ -19,7 +20,6 @@ config['lowlands'] = {'srate': 128,  # sampling rate
                                    'random_state': 23},  # ICA params
                       'notch': 60,  # notch filter frequency
                       'bandpass':[0.1,30],  # initial band pass range
-
                       }
 mode = 'plv'
 datapath = 'C:/Users/Phoebe Chen/Dropbox/MWM_Lowlands_2015_DATA/'
@@ -27,7 +27,7 @@ jsonpath = './json_files'
 infopath = './info_files'
 for pair in os.listdir(datapath)[55:]:
     filepath = os.path.join(datapath, pair)
-    recording = Recording(filepath, config, 'lowlands')
+    recording = Recording(filepath, config, 'lowlands', DataImportType.CSV)
     recording.filter()
     recording.epoch()
     recording.autoreject()

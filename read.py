@@ -1,15 +1,20 @@
 import mne
 import numpy as np
 import pandas as pd
-import os
+import codecs, json, os
 import autoreject as autor
 from mne.preprocessing import ICA
 from matplotlib import pyplot as plt
 from statsmodels.tsa.stattools import kpss
+from enum import Enum
+
+class DataImportType(Enum):
+    CSV = 0
+    JSON = 1
 
 class Recording:
 
-    def __init__(self, experiment_path, config, experiment):
+    def __init__(self, experiment_path, config, experiment, import_type, verbose = False):
         """
         :param experiment_path: Path to the data from the experiment
         :param config: Configuration info for the data
@@ -17,24 +22,36 @@ class Recording:
         """
 
         self.config = config[experiment]
+        self.verbose = verbose
 
         # self.eegs is a list containing eeg data (RawArray) from each subject.
         self.eegs = []
 
-        # Each subject has their own sub-directory in the' experiment_path directory
+        subject_count = 0
+
+        # Each subject has their own sub-directory in the experiment_path directory
         for subject in os.listdir(experiment_path):
-            eeg = self._read_excel(os.path.join(experiment_path,subject))
+            if subject_count >= 2:
+                if self.verbose:
+                    print('ERROR – more than two files in subdirectory:', experiment_path)
+
+            if import_type == DataImportType.CSV:
+                eeg = self._read_excel(os.path.join(experiment_path, subject))
+
+            elif import_type == DataImportType.JSON:
+                eeg = self._read_json(os.path.join(experiment_path, subject))
 
             # update stream information with new information
             self.eegs.append(eeg)
 
-        # Make sure EEG recordings are for the same amount of time
-        if len(self.eegs[0]) != len(self.eegs[1]):
-            print('ERROR – incompatible EEG lengths: ', len(self.eegs[0]), ' ', len(self.eegs[1]))
+            subject_count += 1
+
+        # Adjust the length of the EEGs
+        self.adjust_eeg_length(experiment_path, verbose = verbose)
 
         # Update config settings for this new Recording data
         self.update_config({'pair_name': self.path_to_filename(experiment_path),
-                            'length': len(eeg) / self.config['srate']})
+                                    'length': len(self.eegs[0]) / self.config['srate']})
 
     def _read_excel(self, path):
         """
@@ -60,8 +77,97 @@ class Recording:
                                montage='standard_1020')
         eeg = mne.io.RawArray(data, mneInfo, first_samp=0, verbose=False)
 
-        print("Data successfully read: ", path)
+        if self.verbose:
+            print("Data successfully read: ", path)
+
         return eeg
+
+    def _read_json(self, path):
+        """
+        Reads in a json file containing EEG data
+        :param path: Path to json object we want to read
+        :return: Returns an mne.io.RawArray object representing the EEG data
+        """
+        file = codecs.open(path, 'r', encoding='utf-8').read()
+        data = np.array(json.loads(file))
+
+        # Reshape to remove epochs if necessary
+        shape = data.shape
+        if len(shape) > 2:
+            # Epoch indices are the first axis.
+            # So, for each index, take that epoch and
+            # append it to the 2D array corresponding
+            # to the top index.
+            print(data.shape)
+            data = (data.swapaxes(0, 1)).reshape(shape[1], shape[0] * shape[2])
+        print(data.shape)
+
+        # Initialize mne raw
+        mneInfo = mne.create_info(ch_names=self.config['channels'],
+                                  sfreq=self.config['srate'],
+                                  ch_types='eeg',
+                                  montage='standard_1020')
+        eeg = mne.io.RawArray(data, mneInfo, first_samp=0, verbose=False)
+
+        if self.verbose:
+            print("Data successfully read: ", path)
+
+        return eeg
+
+    def adjust_eeg_length(self, experiment_path, verbose = False):
+        # Make sure EEG recordings are for the same amount of time
+        if len(self.eegs[0]) != len(self.eegs[1]):
+            if self.verbose:
+                print('WARNING – incompatible EEG lengths for file:', experiment_path)
+
+            if self.verbose:
+                # Print out the lengths of the EEGs
+                subject_i = 0
+                for subject in os.listdir(experiment_path):
+                    print(repr(subject) + ': ' + repr(len(self.eegs[subject_i])))
+                    subject_i += 1
+
+            # From the longer file, remove a number of data points equal to the difference between the lengths
+            len_0 = len(self.eegs[0])
+            len_1 = len(self.eegs[1])
+            error_dif = max(len_0, len_1) - min(len_0, len_1)
+
+            if (len_0 > len_1):
+                longer_data = self.eegs[0].get_data()
+
+                # Remove last error_dif items in dimension = 1 (columns)
+                shortened_data = longer_data[:, 0:longer_data.shape[1] - error_dif]
+
+                # Create a new RawArray object - NOTE: this is super inefficient.
+                # If we decide we want to keep this, we should implement
+                # the length adjustment when we load in the data initially.
+                mneInfo = mne.create_info(ch_names=self.config['channels'],
+                                          sfreq=self.config['srate'],
+                                          ch_types='eeg',
+                                          montage='standard_1020')
+                eeg = mne.io.RawArray(shortened_data, mneInfo, first_samp=0, verbose=False)
+                self.eegs[0] = eeg
+
+                if verbose:
+                    print('Length of EEG recording shortened from ' + repr(longer_data.shape[1]) + ' to ' + repr(
+                        shortened_data.shape[1]))
+
+            elif (len_1 > len_0):
+                longer_data = self.eegs[1].get_data()
+
+                # Remove last error_dif items in dimension = 1 (columns)
+                shortened_data = longer_data[:, 0:longer_data.shape[1] - error_dif]
+
+                mneInfo = mne.create_info(ch_names=self.config['channels'],
+                                          sfreq=self.config['srate'],
+                                          ch_types='eeg',
+                                          montage='standard_1020')
+                eeg = mne.io.RawArray(shortened_data, mneInfo, first_samp=0, verbose=False)
+                self.eegs[1] = eeg
+
+                if verbose:
+                    print('Length of EEG recording shortened from ' + repr(longer_data.shape[1]) + ' to ' + repr(
+                        shortened_data.shape[1]))
 
     def filter(self):
         """
@@ -96,7 +202,6 @@ class Recording:
         # Update config with epochs
         self.update_config({'epoched': 1})
 
-
     def autoreject(self):
         """
         Performs autorejection.
@@ -104,7 +209,8 @@ class Recording:
         """
         # Check if the data is epoched
         if 'epoched' not in self.config.keys():
-            print('Data not epoched; autoreject failed')
+            if self.verbose:
+                print('Data not epoched; autoreject failed')
             return
 
         before_len = len(self.eegs[0])
@@ -127,7 +233,8 @@ class Recording:
 
         # Update config
         self.update_config({'autoreject': np.where(good_epochs)})
-        print('Good epochs:', np.sum(good_epochs), 'out of', before_len)
+        if self.verbose:
+            print('Good epochs:', np.sum(good_epochs), 'out of', before_len)
 
     def identify_ICA(self):
         """
@@ -144,7 +251,6 @@ class Recording:
 
             ica.plot_components(inst=eeg)
             self.eegs[i] = ica.apply(eeg)
-
 
     def update_config(self, new_info):
         """
@@ -177,5 +283,3 @@ class Recording:
             plt.show()
 
         return fig
-
-# Test change for first commit
